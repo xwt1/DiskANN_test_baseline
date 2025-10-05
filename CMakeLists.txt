@@ -29,6 +29,10 @@ endif()
 
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake;${CMAKE_MODULE_PATH}")
 
+# MPI
+find_package(MPI REQUIRED)
+include_directories(${MPI_CXX_INCLUDE_DIRS})
+
 # Install nuget packages for dependencies.
 if (MSVC)
     find_program(NUGET_EXE NAMES nuget)

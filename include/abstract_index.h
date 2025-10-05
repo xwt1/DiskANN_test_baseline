@@ -32,6 +32,20 @@ struct consolidation_report
     }
 };
 
+struct SearchComputeStats
+{
+    uint64_t total_queries = 0;
+    uint64_t total_hops = 0;
+    uint64_t total_distance_comparisons = 0;
+};
+
+struct BuildComputeStats
+{
+    uint64_t total_invocations = 0;
+    uint64_t total_hops = 0;
+    uint64_t total_distance_comparisons = 0;
+};
+
 /* A templated independent class for intercation with Index. Uses Type Erasure to add virtual implemetation of methods
 that can take any type(using std::any) and Provides a clean API that can be inherited by different type of Index.
 */
@@ -105,6 +119,12 @@ class AbstractIndex
     template <typename tag_type, typename data_type> int get_vector_by_tag(tag_type &tag, data_type *vec);
 
     template <typename label_type> void set_universal_label(const label_type universal_label);
+
+    virtual SearchComputeStats get_search_compute_stats() const = 0;
+    virtual void reset_search_compute_stats() = 0;
+
+    virtual BuildComputeStats get_build_compute_stats() const = 0;
+    virtual void reset_build_compute_stats() = 0;
 
   private:
     virtual void _build(const DataType &data, const size_t num_points_to_load, TagVector &tags) = 0;

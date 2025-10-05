@@ -98,6 +98,7 @@ Please see the following pages on using the compiled code:
 - [Commandline examples for using in-memory streaming indices](workflows/dynamic_index.md)
 - [Commandline interface for building and search in memory indices with label data and filters](workflows/filtered_in_memory.md)
 - [Commandline interface for building and search SSD based indices with label data and filters](workflows/filtered_ssd_index.md)
+- [Sharded index build/search workflow (compare_build & compare_search)](workflows/sharded_compare.md)
 - [diskannpy - DiskANN as a python extension module](python/README.md)
 
 Please cite this software in your work as:
@@ -110,4 +111,14 @@ Please cite this software in your work as:
    version = {0.6.1},
    year = {2023}
 }
+```
+
+
+
+```
+cd /nfs/DiskANN_test_baseline
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j"$(nproc)"
+./build/bin/compare_build --help
+./build/bin/compare_search --help
 ```

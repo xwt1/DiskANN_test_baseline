@@ -24,6 +24,7 @@
 
 #include "quantized_distance.h"
 #include "pq_data_store.h"
+#include <atomic>
 
 #define OVERHEAD_FACTOR 1.1
 #define EXPAND_IF_FULL 0
@@ -189,6 +190,14 @@ template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t> clas
     DISKANN_DLLEXPORT void print_status();
 
     DISKANN_DLLEXPORT void count_nodes_at_bfs_levels();
+
+    DISKANN_DLLEXPORT SearchComputeStats get_search_compute_stats() const override;
+
+    DISKANN_DLLEXPORT void reset_search_compute_stats() override;
+
+    DISKANN_DLLEXPORT BuildComputeStats get_build_compute_stats() const override;
+
+    DISKANN_DLLEXPORT void reset_build_compute_stats() override;
 
     // This variable MUST be updated if the number of entries in the metadata
     // change.
@@ -398,6 +407,38 @@ template <typename T, typename TagT = uint32_t, typename LabelT = uint32_t> clas
 
     // Query scratch data structures
     ConcurrentQueue<InMemQueryScratch<T> *> _query_scratch;
+
+    struct SearchCounters
+    {
+        std::atomic<uint64_t> total_queries{0};
+        std::atomic<uint64_t> total_hops{0};
+        std::atomic<uint64_t> total_cmps{0};
+    };
+
+    mutable SearchCounters _search_counters;
+
+    inline void record_search_counters(uint32_t hops, uint32_t cmps)
+    {
+        _search_counters.total_queries.fetch_add(1, std::memory_order_relaxed);
+        _search_counters.total_hops.fetch_add(hops, std::memory_order_relaxed);
+        _search_counters.total_cmps.fetch_add(cmps, std::memory_order_relaxed);
+    }
+
+    struct BuildCounters
+    {
+        std::atomic<uint64_t> total_invocations{0};
+        std::atomic<uint64_t> total_hops{0};
+        std::atomic<uint64_t> total_cmps{0};
+    };
+
+    mutable BuildCounters _build_counters;
+
+    inline void record_build_counters(uint32_t hops, uint32_t cmps)
+    {
+        _build_counters.total_invocations.fetch_add(1, std::memory_order_relaxed);
+        _build_counters.total_hops.fetch_add(hops, std::memory_order_relaxed);
+        _build_counters.total_cmps.fetch_add(cmps, std::memory_order_relaxed);
+    }
 
     // Flags for PQ based distance calculation
     bool _pq_dist = false;

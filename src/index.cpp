@@ -987,6 +987,14 @@ std::pair<uint32_t, uint32_t> Index<T, TagT, LabelT>::iterate_to_fixed_point(
             best_L_nodes.insert(Neighbor(id_scratch[m], dist_scratch[m]));
         }
     }
+    if (search_invocation)
+    {
+        record_search_counters(hops, cmps);
+    }
+    else
+    {
+        record_build_counters(hops, cmps);
+    }
     return std::make_pair(hops, cmps);
 }
 
@@ -1998,6 +2006,7 @@ std::pair<uint32_t, uint32_t> Index<T, TagT, LabelT>::search(const T *query, con
 
     _data_store->preprocess_query(query, scratch);
 
+    // retrieve the results
     auto retval = iterate_to_fixed_point(scratch, L, init_ids, false, unused_filter_label, true);
 
     NeighborPriorityQueue &best_L_nodes = scratch->best_l_nodes();
@@ -3192,6 +3201,42 @@ template <typename T, typename TagT, typename LabelT> void Index<T, TagT, LabelT
     }
 
     delete[] bfs_sets;
+}
+
+template <typename T, typename TagT, typename LabelT>
+SearchComputeStats Index<T, TagT, LabelT>::get_search_compute_stats() const
+{
+    SearchComputeStats stats;
+    stats.total_queries = _search_counters.total_queries.load(std::memory_order_relaxed);
+    stats.total_hops = _search_counters.total_hops.load(std::memory_order_relaxed);
+    stats.total_distance_comparisons = _search_counters.total_cmps.load(std::memory_order_relaxed);
+    return stats;
+}
+
+template <typename T, typename TagT, typename LabelT>
+void Index<T, TagT, LabelT>::reset_search_compute_stats()
+{
+    _search_counters.total_queries.store(0, std::memory_order_relaxed);
+    _search_counters.total_hops.store(0, std::memory_order_relaxed);
+    _search_counters.total_cmps.store(0, std::memory_order_relaxed);
+}
+
+template <typename T, typename TagT, typename LabelT>
+BuildComputeStats Index<T, TagT, LabelT>::get_build_compute_stats() const
+{
+    BuildComputeStats stats;
+    stats.total_invocations = _build_counters.total_invocations.load(std::memory_order_relaxed);
+    stats.total_hops = _build_counters.total_hops.load(std::memory_order_relaxed);
+    stats.total_distance_comparisons = _build_counters.total_cmps.load(std::memory_order_relaxed);
+    return stats;
+}
+
+template <typename T, typename TagT, typename LabelT>
+void Index<T, TagT, LabelT>::reset_build_compute_stats()
+{
+    _build_counters.total_invocations.store(0, std::memory_order_relaxed);
+    _build_counters.total_hops.store(0, std::memory_order_relaxed);
+    _build_counters.total_cmps.store(0, std::memory_order_relaxed);
 }
 
 // REFACTOR: This should be an OptimizedDataStore class
