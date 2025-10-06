@@ -1,0 +1,2 @@
+test in two datasets. you can see that, at the same recall,
+when sharding number increase(1,3,5,7,10), the total number of comparisons increase. It demonstrates that sharding is not efficient due to the total comparisons increase with sharding number increase.

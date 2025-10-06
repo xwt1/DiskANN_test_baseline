@@ -83,6 +83,8 @@ Each `.map` file maintains the mapping from shard-local IDs back to global datas
 - `--gt_file <path>` — ground-truth binary for recall calculations.
 - `--per_shard_k <int>` — candidates to pull per shard (defaults to `recall_at`).
 - `--search_threads <int>` — number of OpenMP workers (default: auto).
+
+> Note: ensure `per_shard_k * shard_count ≥ recall_at`; the tool enforces this to guarantee enough global candidates when merging shard results.
 - `--output_dir <path>` — if set, writes per-shard CSV summaries (`search_list,recall,total_comparisons`).
 
 ### Example

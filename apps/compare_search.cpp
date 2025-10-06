@@ -167,15 +167,13 @@ EvaluationSummary evaluate_shards(const std::vector<LoadedShard> &shards, diskan
     }
 
     std::vector<uint32_t> final_results(query_count * recall_at, std::numeric_limits<uint32_t>::max());
-    uint64_t total_comparisons = 0;
 
     omp_set_num_threads(search_threads);
-#pragma omp parallel for schedule(dynamic, 1) reduction(+ : total_comparisons)
+#pragma omp parallel for schedule(dynamic, 1)
     for (int64_t qi = 0; qi < static_cast<int64_t>(query_count); ++qi)
     {
         std::vector<Candidate> candidates;
         candidates.reserve(static_cast<size_t>(per_shard_k) * shards.size());
-        uint64_t query_comparisons = 0;
 
         std::vector<uint32_t> local_ids(per_shard_k);
         std::vector<float> local_dists(per_shard_k);
@@ -183,8 +181,7 @@ EvaluationSummary evaluate_shards(const std::vector<LoadedShard> &shards, diskan
         const T *query_ptr = queries + static_cast<size_t>(qi) * query_aligned_dim;
         for (const auto &shard : shards)
         {
-            auto result = shard.index->search(query_ptr, per_shard_k, search_L, local_ids.data(), local_dists.data());
-            query_comparisons += result.second;
+            shard.index->search(query_ptr, per_shard_k, search_L, local_ids.data(), local_dists.data());
 
             for (uint32_t k = 0; k < per_shard_k; ++k)
             {
@@ -219,7 +216,13 @@ EvaluationSummary evaluate_shards(const std::vector<LoadedShard> &shards, diskan
                 final_results[static_cast<size_t>(qi) * recall_at + r] = candidates[r].id;
             }
         }
-        total_comparisons += query_comparisons;
+    }
+
+    uint64_t total_comparisons = 0;
+    for (const auto &shard : shards)
+    {
+        const auto stats = shard.index->get_search_compute_stats();
+        total_comparisons += stats.total_distance_comparisons;
     }
 
     return summarize_results(final_results, query_count, recall_at, gt_ids, gt_dists, gt_dim, has_truth,
@@ -361,7 +364,8 @@ template <typename T> int run_search(const SearchConfig &config)
     }
 
     const uint32_t min_L = *std::min_element(search_lists.begin(), search_lists.end());
-    if (config.recall_at > min_L)
+    const uint32_t per_shard_k = config.per_shard_k == 0 ? config.recall_at : config.per_shard_k;
+    if (per_shard_k == 0)
     {
         diskann::aligned_free(queries);
         if (gt_ids != nullptr)
@@ -372,13 +376,8 @@ template <typename T> int run_search(const SearchConfig &config)
         {
             delete[] gt_dists;
         }
-        std::stringstream ss;
-        ss << "recall_at (" << config.recall_at << ") cannot exceed the smallest search_list value (" << min_L
-           << ").";
-        throw diskann::ANNException(ss.str(), -1);
+        throw diskann::ANNException("per_shard_k must be positive.", -1);
     }
-
-    const uint32_t per_shard_k = config.per_shard_k == 0 ? config.recall_at : config.per_shard_k;
     if (per_shard_k > min_L)
     {
         diskann::aligned_free(queries);
@@ -428,9 +427,46 @@ template <typename T> int run_search(const SearchConfig &config)
                       << config.data_type << "'." << std::endl;
         }
 
+        const uint64_t effective_shard_count = manifest.shards.empty()
+                                                    ? static_cast<uint64_t>(shard_count)
+                                                    : static_cast<uint64_t>(manifest.shards.size());
+        if (static_cast<uint64_t>(per_shard_k) * effective_shard_count < config.recall_at)
+        {
+            diskann::aligned_free(queries);
+            if (gt_ids != nullptr)
+            {
+                delete[] gt_ids;
+            }
+            if (gt_dists != nullptr)
+            {
+                delete[] gt_dists;
+            }
+            std::stringstream ss;
+            ss << "per_shard_k (" << per_shard_k << ") multiplied by number of shard indexes (" << effective_shard_count
+               << ") must be at least recall_at (" << config.recall_at << ").";
+            throw diskann::ANNException(ss.str(), -1);
+        }
+
         std::cout << "\nEvaluating shards for S=" << shard_count << " from " << shard_dir << std::endl;
 
         std::vector<LoadedShard> shards = load_shards(manifest, shard_dir, metric, search_threads, max_search_L);
+
+        if (static_cast<uint64_t>(per_shard_k) * static_cast<uint64_t>(shards.size()) < config.recall_at)
+        {
+            diskann::aligned_free(queries);
+            if (gt_ids != nullptr)
+            {
+                delete[] gt_ids;
+            }
+            if (gt_dists != nullptr)
+            {
+                delete[] gt_dists;
+            }
+            std::stringstream ss;
+            ss << "Loaded shard count (" << shards.size() << ") times per_shard_k (" << per_shard_k
+               << ") is insufficient to produce recall_at (" << config.recall_at << ") results.";
+            throw diskann::ANNException(ss.str(), -1);
+        }
 
         struct ResultRow
         {
